@@ -154,34 +154,7 @@ class botFrame:
         n = np.array([a])
         #print(n)
         self.input = torch.from_numpy(n).to(dtype=torch.float32)
-        #print(self.input)
-                
-def get_data():
-    global data
-    global errors
-    global totaldays
-    client = RESTClient("qOzFjU4nysnLGV5mK9xVZQibcbknHwaW")
-    for x in range(50):
-        data.append([])
-        data[x].append([])
-        data[x].append([])
-    global stamp
-    for num in reversed(range(28)):
-        day = (stamp - (num*86400000))
-        close = day + 23400000
-        temp = datetime.fromtimestamp(day/1000)
-        if num > 1 and temp.weekday() < 4:
-            for x in range(50):
-                aggs = client.stocks_equities_aggregates(tickers[x], 1, "minute", str(int(day)), str(int(close)))
-                if(len(aggs.results) <390):
-                    if tickers[x] not in errors:
-                        errors.append(tickers[x])
-                for i in range(390):
-                    data[x][0].append(aggs.results[i]["o"])
-                    data[x][1].append(aggs.results[i]["v"])
-                time.sleep(12)
-    totaldays = (len(data[0][0])/390) - 1
-    condense()
+        #print(self.input
 
 
 def historic_eval_genomes(genomes,config):
