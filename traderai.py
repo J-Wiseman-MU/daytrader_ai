@@ -108,7 +108,7 @@ class botFrame:
 
 
 #Some neurons. Trying to brute force the problem with deep. Not the problem in a ever-changing 69 float enviornment.
-#Basically, the gist with this was twofold. 1: Primitive Backprop classifier, 2:Geometric Genetic Algorithm.
+#Basically, the gist with this was twofold. 1: Primitive Backprop classifier (SEE buySellClassifier.py), 2:Geometric Genetic Algorithm.
 #Those will be covered when we get to the training functions for them. For now, this is what is on the tin.
 class MLP(torch.nn.Module):
     
