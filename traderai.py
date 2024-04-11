@@ -33,6 +33,8 @@ from neat.config import ConfigParameter, DefaultClassConfig
 from neat.math_util import mean
 
 #Data management for stocks.
+#This is very ugly, most gets thrown in an object next. If I had been doing this enterprize, this should all be on a 
+#db. But I wasn't and I was mostly just curious.
 selection = []
 tickers = ["AAPL","MSFT","AMZN","TSLA","META","JNJ","NVDA","V","XOM","WMT","JPM","CVX","PFE","KO","BAC","ABBV","MRK","ORCL","DIS","MCD","CRM","VZ","CSCO","NKE","NEE","CMCSA","TXN","QCOM","WFC","AMD","BMY","INTC","RTX","CVS","SCHW","T","MDT","BX","COP","IBM","PYPL","NFLX","C","SBUX","AMAT","MDLZ","GE","MO","GILD","KR"]
 bots = []
@@ -47,11 +49,67 @@ totaldays = 0
 dayiterator = 0
 fillerdays = 0
 
+#This is that object I talked about. Should've used setters and getters, may have taken out that stuff to enable
+#Trying parallel stuff further down the doc and was using globals to run threads.
+class botFrame:
+    def __init__(self, ticker):
+        self.prices = []
+        self.volumes = []
+        self.averages = []
+        self.cash = 100.0
+        self.position  = 0.0
+        #These are all stock terms.
+        #indexes 0-2 are the 10 min aves,3-4 are the 15 min, and 5 is the 30 min
+        #There are 69(An accident because I wanted a clean 30 min of prices chunk in
+        #the ) NEURAL NETWORK INPUT NEURONS.
+        #Basicially, every min, the price of a stock will flow into the 30 min chunk.
+        #From that, some relevant stats are calculated. delete partition overflow.
+        #Send to NN outputs a prediction of buy/sell proportion.
+        #Entry points on nn are stored as a vector of floats.
+        
+        self.currmin = 0
+        for x in range(30):
+            self.prices.append(-1.0)
+            self.volumes.append(-1.0)
+        for x in range(6):
+            self.averages.append(-1.0)
+        self.name = ticker
+    def update(self,newPrice,newVol):
+        self.prices.pop(0)
+        self.prices.append(float(newPrice))
+        if(self.currmin > 29):
+            self.position = (self.position * (self.prices[29] / self.prices[28]))
+        elif(self.currmin > 0):
+            self.position = (self.position * (self.prices[self.currmin] / self.prices[self.currmin - 1]))
+        self.volumes.pop(0)
+        self.volumes.append(float(newVol))
+        tensplit = np.array_split(self.prices,3)
+        fifteensplit = np.array_split(self.prices,2)
+        #print(type(tensplit[0][0]))
+        if self.currmin > 9:
+            self.averages[0] = statistics.mean(tensplit[0])
+        if self.currmin > 14:
+            self.averages[3] = statistics.mean(fifteensplit[0])
+        if self.currmin > 19:
+            self.averages[1] = statistics.mean(tensplit[1])
+        if self.currmin > 29:
+            self.averages[2] = statistics.mean(tensplit[2])
+            self.averages[4] = statistics.mean(fifteensplit[1])
+            self.averages[5] = statistics.mean(self.prices)
+        self.currmin += 1
+        a = self.prices + self.volumes + self.averages + [self.cash] + [self.position] + [float(self.currmin)]
+        n = np.array([a])
+        #print(n)
+        self.input = torch.from_numpy(n).to(dtype=torch.float32)
+        #print(self.input
+
+
 
 
 
 #Some neurons. Trying to brute force the problem with deep. Not the problem in a ever-changing 69 float enviornment.
-#Basically, the gist with this was twofold.
+#Basically, the gist with this was twofold. 1: Primitive Backprop classifier, 2:Geometric Genetic Algorithm.
+#Those will be covered when we get to the training functions for them. For now, this is what is on the tin.
 class MLP(torch.nn.Module):
     
     def __init__(self):
@@ -97,15 +155,17 @@ class MLP(torch.nn.Module):
                                            nonlin,
                                            torch.nn.Linear(136, 2))
      
-     #More experimenting, didn't feel like doing an if statement.
-    #I think adam panned out the best here, but there's no attention. (wasn't big at the time).
+     #More experimenting, didn't feel like doing an if statement would do in enterprise.
+    #I think adam panned out the best here, but there's no attention, mayble a different optimizer is better with attention)
     def init_optimizer(self):
 
         #self.optimizer = torch.optim.SGD(self.parameters(), lr = self.alpha)
         #self.optimizer = torch.optim.Adam(self.parameters(), lr = self.alpha)
         self.optimizer = torch.optim.AdamW(self.parameters(), lr = self.alpha)
 
-    
+    #Doctor I studied under had a soft spot for CrossEntropy
+    #Think it performed better too, the extra stability in
+    #all the noise really helped.
     def objective(self, preds, labels):
 
         obj = torch.nn.CrossEntropyLoss()
@@ -117,79 +177,14 @@ class MLP(torch.nn.Module):
 
         return self.network(x)   
 
-class botFrame:
-    def __init__(self, ticker):
-        self.prices = []
-        self.volumes = []
-        self.averages = []
-        self.cash = 100.0
-        self.position  = 0.0
-        #indexes 0-2 are the 10 min aves,3-4 are the 15 min, and 5 is the 30 min
-        self.currmin = 0
-        for x in range(30):
-            self.prices.append(-1.0)
-            self.volumes.append(-1.0)
-        for x in range(6):
-            self.averages.append(-1.0)
-        self.name = ticker
-    def update(self,newPrice,newVol):
-        self.prices.pop(0)
-        self.prices.append(float(newPrice))
-        if(self.currmin > 29):
-            self.position = (self.position * (self.prices[29] / self.prices[28]))
-        elif(self.currmin > 0):
-            self.position = (self.position * (self.prices[self.currmin] / self.prices[self.currmin - 1]))
-        self.volumes.pop(0)
-        self.volumes.append(float(newVol))
-        tensplit = np.array_split(self.prices,3)
-        fifteensplit = np.array_split(self.prices,2)
-        #print(type(tensplit[0][0]))
-        if self.currmin > 9:
-            self.averages[0] = statistics.mean(tensplit[0])
-        if self.currmin > 14:
-            self.averages[3] = statistics.mean(fifteensplit[0])
-        if self.currmin > 19:
-            self.averages[1] = statistics.mean(tensplit[1])
-        if self.currmin > 29:
-            self.averages[2] = statistics.mean(tensplit[2])
-            self.averages[4] = statistics.mean(fifteensplit[1])
-            self.averages[5] = statistics.mean(self.prices)
-        self.currmin += 1
-        a = self.prices + self.volumes + self.averages + [self.cash] + [self.position] + [float(self.currmin)]
-        n = np.array([a])
-        #print(n)
-        self.input = torch.from_numpy(n).to(dtype=torch.float32)
-        #print(self.input
-
-
-def historic_eval_genomes(genomes,config):
-    #impliment non-live evaluation and training of nns
-    #Step 1, assign each genome to a random stock at the start of each generation
-    global selection
-    global tickers
-    global totaldays
-    global dayiterator
-    global bots
-    selection.clear()
-    bots.clear()
-    placements = []
-    for x in range(len(generation)):
-        placements.append(random.randint(0,49))
-    for x in placements:
-        selection.append(tickers[x])
-    #threads = multiprocessing.Pool()
-    for x in selection:
-        bots.append(botFrame(x))
-    #Step 2, call simulate in a paralellized fasion to get the final monetary balance of each net
-    #threads.map(simulate,genomes)
-    for g in genomes:
-        simulate(g)
-    #Step 3, incriment the day
-    if dayiterator == totaldays:
-        dayiterator = 0
-    else:
-        dayiterator += 1
-    
+#Ok, so did you know there was a library that lets you extract the vectors out of pytorch?
+#We can treat those as chromosomes.
+#I SENSE RESONABLE SKEPTICISM for a couple reasons. #1 Genetic Algorithms don't have
+#to converge, and finding the right spot is really hard. #2 Genetic Algorithms don't traditionally
+#perform well on a large, noisy search space. If only one could reduce noise. FOCUS or something... idk.
+#Anyway. I'm not going to go over the theroy of how this works in the doc, it would be too long...
+#SO here's a paper I wrote. https://docs.google.com/document/d/1P8zF9v1qJe_AXndhVCdiIZGvrZd0hFNdlXATOSjJqnc/edit?usp=sharing (on anyone can view with link.)
+#Spoiler alert, It uses squares, uniform probability, and was much faster on large search spaces.
 def gen_alg(maxgen,mute_rate,pop_size,elitism,survivors,threshold):
     global selection
     global tickers
@@ -237,7 +232,43 @@ def gen_alg(maxgen,mute_rate,pop_size,elitism,survivors,threshold):
                     population[j][0][k] = random.uniform(-4,4)
         pool += 1
 
+#Ok, this is a few years old, but it was basically the first time I messed with threading to
+#get extra performance. If you want spoilers to see where this goes, check the bottom of the doc.
+#What this started as was my first GA. Then, because it was slow, I tried to parallelize evaluation.
+#This resulted in moderate speedup, but eventually, I outgrew arrays and went to np arrays and 
+#there was a better soulution that didn't use python's basic multithreading.
+def historic_eval_genomes(genomes,config):
+    #impliment non-live evaluation and training of nns
+    #Step 1, assign each genome to a random stock at the start of each generation
+    global selection
+    global tickers
+    global totaldays
+    global dayiterator
+    global bots
+    selection.clear()
+    bots.clear()
+    placements = []
+    for x in range(len(generation)):
+        placements.append(random.randint(0,49))
+    for x in placements:
+        selection.append(tickers[x])
+    #Early multithreading, right?
+    #threads = multiprocessing.Pool()
+    for x in selection:
+        bots.append(botFrame(x))
+    #Step 2, call simulate in a paralellized fasion to get the final monetary balance of each net
+    #threads.map(simulate,genomes)
+    for g in genomes:
+        simulate(g)
+    #Step 3, incriment the day
+    if dayiterator == totaldays:
+        dayiterator = 0
+    else:
+        dayiterator += 1
+    
 
+#Parallelised Genetic Algorithm Evaluation
+#Multiple offspring at once. Produced resonable speedup using arrays(check old commits.)
 def simulate(model,index):
     #Step 1:get stock data for current day and the ticker in selection that matches the index of the current genome and genarate the genome's net
     global bots
@@ -308,9 +339,7 @@ def simulate(model,index):
         return meanearnings - 150.0
 
 
-#run(config_path)
-#print(errors)
-#for x in range(50):
+#Data loaders.
 def condense():
     global data
     global currentDay
@@ -339,9 +368,10 @@ def reload():
 #t= torch.from_numpy(n)
 #print(t)
 #get_data()
+#CUDA V11.7.64 may work for this device, otherwise try 12.1. I got it working, but local CUDA insalls are a nightmare.
 reload()
-#local_dir = os.path.dirname(__file__)
+local_dir = os.path.dirname(__file__)
 #config_path =os.path.join(local_dir, 'CONFIG.txt')
 #learn_history(config_path)
-#print(torch.cuda.is_available())
+print(torch.cuda.is_available())
 gen_alg(400,0.000025,400,10,200,35)
