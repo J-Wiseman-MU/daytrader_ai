@@ -1,3 +1,4 @@
+#I tried a lot of stuff here.
 from copyreg import pickle
 from hashlib import new
 from math import floor, isclose
@@ -31,6 +32,7 @@ import random
 from neat.config import ConfigParameter, DefaultClassConfig
 from neat.math_util import mean
 
+#Data management for stocks.
 selection = []
 tickers = ["AAPL","MSFT","AMZN","TSLA","META","JNJ","NVDA","V","XOM","WMT","JPM","CVX","PFE","KO","BAC","ABBV","MRK","ORCL","DIS","MCD","CRM","VZ","CSCO","NKE","NEE","CMCSA","TXN","QCOM","WFC","AMD","BMY","INTC","RTX","CVS","SCHW","T","MDT","BX","COP","IBM","PYPL","NFLX","C","SBUX","AMAT","MDLZ","GE","MO","GILD","KR"]
 bots = []
@@ -48,7 +50,8 @@ fillerdays = 0
 
 
 
-
+#Some neurons. Trying to brute force the problem with deep. Not the problem in a ever-changing 69 float enviornment.
+#Basically, the gist with this was twofold.
 class MLP(torch.nn.Module):
     
     def __init__(self):
@@ -94,13 +97,15 @@ class MLP(torch.nn.Module):
                                            nonlin,
                                            torch.nn.Linear(136, 2))
      
-        
+     #More experimenting, didn't feel like doing an if statement.
+    #I think adam panned out the best here, but there's no attention. (wasn't big at the time).
     def init_optimizer(self):
 
         #self.optimizer = torch.optim.SGD(self.parameters(), lr = self.alpha)
         #self.optimizer = torch.optim.Adam(self.parameters(), lr = self.alpha)
         self.optimizer = torch.optim.AdamW(self.parameters(), lr = self.alpha)
 
+    
     def objective(self, preds, labels):
 
         obj = torch.nn.CrossEntropyLoss()
